@@ -62,6 +62,18 @@ class BackupTests(unittest.TestCase):
         self.assertEqual([item["snapshot"] for item in listed], [first, second])
         self.assertEqual(listed[0]["files"], 1)
 
+    def test_duplicate_backup_does_not_fsync_redundant_objects(self):
+        self.snapshot()
+        original = os.fsync
+        calls = []
+        def tracking(descriptor):
+            calls.append(descriptor)
+            return original(descriptor)
+        with patch("saveharbor.core.os.fsync", side_effect=tracking):
+            second = self.snapshot()
+        self.assertEqual(len(calls), 1)  # Only the new manifest needs fsync.
+        self.assertTrue(verify(self.store, second)["verified"])
+
     def test_path_and_handle_ctime_semantics_can_differ(self):
         original = os.fstat
         def different_ctime(descriptor):

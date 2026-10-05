@@ -161,14 +161,20 @@ def backup(source: Path, root: Path, *, exclude=()):
                         if _fingerprint(os.fstat(stream.fileno())) != handle_before:
                             raise BackupError("Source changed during reading")
                     output.flush()
-                    os.fsync(output.fileno())
-                digest = hasher.hexdigest()
-                object_path = root / "objects" / digest
-                try:
-                    os.link(temporary, object_path)
-                except FileExistsError:
-                    if _digest(object_path) != (digest, size):
-                        raise BackupError("Existing content object is damaged")
+                    digest = hasher.hexdigest()
+                    object_path = root / "objects" / digest
+                    already_present = object_path.exists() or object_path.is_symlink()
+                    if already_present:
+                        if _digest(object_path) != (digest, size):
+                            raise BackupError("Existing content object is damaged")
+                    else:
+                        os.fsync(output.fileno())
+                if not already_present:
+                    try:
+                        os.link(temporary, object_path)
+                    except FileExistsError:
+                        if _digest(object_path) != (digest, size):
+                            raise BackupError("Existing content object is damaged")
                 entries[name] = {"sha256": digest, "size": size}
             finally:
                 if temporary is not None:

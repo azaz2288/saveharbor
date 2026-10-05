@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
-from saveharbor.core import BackupError, backup, diff, init, list_snapshots, load_snapshot, restore, verify
+from saveharbor.core import BackupError, _manifest_bytes, backup, diff, init, list_snapshots, load_snapshot, restore, verify
 
 
 class BackupTests(unittest.TestCase):
@@ -170,7 +170,9 @@ class BackupTests(unittest.TestCase):
         for mutate in (lambda p: p.update(version=True),
                        lambda p: p["files"]["save.json"].update(sha256="../outside"),
                        lambda p: p["files"]["save.json"].update(size=True),
-                       lambda p: p.update(directories=["save.json"])):
+                       lambda p: p.update(directories=["save.json"]),
+                       lambda p: p.update(created_at=True),
+                       lambda p: p.update(created_at="2026-10-06")):
             candidate = copy.deepcopy(original)
             mutate(candidate)
             path.write_text(json.dumps(candidate))
@@ -219,6 +221,15 @@ class BackupTests(unittest.TestCase):
                 self.snapshot()
         self.assertEqual(list((self.store / "snapshots").glob("*.json")), [])
         self.assertEqual(list((self.store / "objects").glob(".pending-*")), [])
+
+    def test_unreadable_oversized_manifest_never_published(self):
+        content = {"files": {str(i) + "x" * 8192: {} for i in range(1025)}}
+        with self.assertRaises(BackupError):
+            _manifest_bytes(content)
+        with patch("saveharbor.core._manifest_bytes", side_effect=BackupError("oversized manifest")):
+            with self.assertRaises(BackupError):
+                self.snapshot()
+        self.assertEqual(list((self.store / "snapshots").glob("*.json")), [])
 
     def test_duplicate_manifest_keys_rejected(self):
         snapshot = self.snapshot()

@@ -15,6 +15,13 @@ class BackupError(Exception):
     """Unsafe input, damaged backup or incomplete operation."""
 
 
+def _manifest_bytes(manifest):
+    content = json.dumps(manifest, ensure_ascii=True, sort_keys=True, allow_nan=False).encode("utf-8")
+    if len(content) > 8 * 1024 * 1024:
+        raise BackupError("Snapshot manifest exceeds readable 8 MiB limit")
+    return content
+
+
 def _regular(path: Path):
     info = path.lstat()
     if path.is_symlink() or path.is_junction() or not stat.S_ISREG(info.st_mode):
@@ -171,11 +178,12 @@ def backup(source: Path, root: Path, *, exclude=()):
         snapshot = uuid.uuid4().hex
         manifest = {"version": 1, "snapshot": snapshot, "created_at": datetime.now(timezone.utc).isoformat(), "files": entries,
                     "directories": directories, "excluded": list(excluded)}
+        content = _manifest_bytes(manifest)
         temporary = None
         try:
-            with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=root / "snapshots", prefix=".pending-", delete=False) as stream:
+            with tempfile.NamedTemporaryFile("wb", dir=root / "snapshots", prefix=".pending-", delete=False) as stream:
                 temporary = Path(stream.name)
-                json.dump(manifest, stream, ensure_ascii=True, sort_keys=True, allow_nan=False)
+                stream.write(content)
                 stream.flush()
                 os.fsync(stream.fileno())
             os.link(temporary, root / "snapshots" / f"{snapshot}.json")
@@ -197,6 +205,13 @@ def load_snapshot(root: Path, snapshot: str):
     if not isinstance(value.get("files"), dict) or not isinstance(value.get("directories"), list):
         raise BackupError("Invalid snapshot entries")
     files, directories = value["files"], value["directories"]
+    created_at = value.get("created_at")
+    try:
+        created = datetime.fromisoformat(created_at)
+    except (TypeError, ValueError) as exc:
+        raise BackupError("Snapshot needs a timezone-aware creation timestamp") from exc
+    if created.tzinfo is None:
+        raise BackupError("Snapshot creation timestamp needs a timezone")
     if len(files) + len(directories) > 100000 or any(not isinstance(name, str) for name in directories):
         raise BackupError("Invalid directory list")
     names = list(files) + directories

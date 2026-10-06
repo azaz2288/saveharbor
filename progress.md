@@ -1,5 +1,15 @@
 # Verified progress
 
+## 2026-10-07 v0.2 retention review and restore rehearsal
+
+Added explicit keep-latest/protected snapshot policy, actual UTC chronology with stable ID tie-breaking, bounded catalog review, all-object hash/size checks (including retired-only and orphan objects), shared-reference-safe candidates and a content/policy digest. Review is read-only and non-executable: no object or snapshot is deleted, moved or quarantined, and no apply command exists. Optional NEW-root rehearsal writes each kept version from the same pinned in-memory manifest; after all copies finish it re-audits every destination's content/tree and verifies the source-store inventory remained unchanged.
+
+Initial 13 new methods produced one CLI failure and 25 API errors including subcases because retention did not exist. A helper-extraction patch initially matched verify instead of restore, introducing transient local NameErrors; corrected before publication without weakening the original tests. A later dedicated fault test reproduced a new false success when a later copy damaged an earlier already-audited target; auditing all copies after the final write fixes it. The complete final 58-method suite passes on Windows (56 pass, 2 symlink privilege skips), 27.338 seconds; both synthetic demos, compile/diff and 5 root maintenance tests passed. Includes 30 seeded set-reference comparisons, actual 1000/1001 manifest boundary, UTC overflow, source-change, copy/fsync failure, post-copy corruption, pinned load and independent canonical digest checks. No user backups/saves or real disk exhaustion tested.
+
+Module version was stale at 0.1.2 while package metadata said 0.1.3; this release aligns both to 0.2.0 with a regression. Installed-wheel acceptance and exact-SHA Windows/Linux CI are recorded in the portfolio stage report outside the source repository. CLI-only work has no browser UI; real command/subprocess and installed-package checks apply. This stage completes read-only policy/rehearsal, not persistent approvals, two-phase garbage collection, encryption, GUI, atomic filesystem snapshots, hard OS quotas or power-loss recovery.
+
+0.2.0 wheel installed only into this project's venv. Source-external cwd and isolated Python confirmed matching module/package versions and site-packages, all 8 original restore faults (0.748s) plus 26 retention methods (25 passed, 1 Windows symlink privilege skip, 17.384s), synthetic retention demo, console subcommand help and pip check. No repository hook or Release asset was changed. Full source 58 methods include two total Windows symlink privilege skips; Linux CI must verify both rather than inheriting old green.
+
 ## 2026-10-06 v0.1.3 pinned restore manifest and fault acceptance
 Eight new synthetic fault tests initially produced two real failures: restore loaded the manifest twice and restored new-save after the preflighted old-save manifest was changed on disk. Restore now loads once and shares object preflight with verify, using that same validated in-memory manifest for copying. Full per-copy hash/size checking, file fsync and exclusive targets remain.
 

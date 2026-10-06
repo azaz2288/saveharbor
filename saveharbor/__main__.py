@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
-from .core import BackupError, backup, diff, init, list_snapshots, restore, verify
+from .core import BackupError, backup, diff, init, list_snapshots, restore, verify, retention_plan, rehearse_retention
 
 
 def main(argv=None):
@@ -24,6 +24,11 @@ def main(argv=None):
     command.add_argument("store", type=Path)
     command.add_argument("before")
     command.add_argument("after")
+    command = sub.add_parser('retention', help='Read-only candidates; optionally restore kept versions to a NEW rehearsal directory')
+    command.add_argument('store', type=Path)
+    command.add_argument('--keep-latest', required=True, type=int)
+    command.add_argument('--protect', action='append', default=[])
+    command.add_argument('--rehearse', type=Path)
     args = parser.parse_args(argv)
     try:
         if args.action == "init":
@@ -37,6 +42,10 @@ def main(argv=None):
             result = list_snapshots(args.store)
         elif args.action == "restore":
             result = restore(args.store, args.snapshot, args.target)
+        elif args.action == 'retention':
+            options = dict(keep_latest=args.keep_latest, protect=args.protect)
+            result = (rehearse_retention(args.store, args.rehearse, **options) if args.rehearse
+                      else retention_plan(args.store, **options))
         else:
             result = diff(args.store, args.before, args.after)
     except (BackupError, OSError, UnicodeError) as exc:

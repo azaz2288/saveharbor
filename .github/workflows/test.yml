@@ -16,6 +16,7 @@ jobs:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -v
       - run: python examples/demo.py
+      - run: python examples/retention.py
       - run: python -m compileall -q saveharbor tests examples tools
       - run: python -m pip wheel --no-deps --wheel-dir dist .
       - name: Installed CLI
@@ -26,4 +27,5 @@ jobs:
           saveharbor --help
           python -c "import saveharbor; assert 'site-packages' in saveharbor.__file__"
           python -I "$GITHUB_WORKSPACE/tools/verify_installed.py"
+          python -I "$GITHUB_WORKSPACE/examples/retention.py"
           python -m pip check

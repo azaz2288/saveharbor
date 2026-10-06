@@ -45,10 +45,32 @@ v0.1.3修复恢复一致性：只读取一次合法清单，完整核验其全�
 
 ## 后续里程碑
 
-1. 经过模拟恢复验证的保留策略及双阶段垃圾回收，不能直接删去唯一版本。
+1. 已有只读保留策略和实际恢复预演；后续实现持久审批、可恢复隔离及双阶段垃圾回收，不能直接删去唯一版本。
 2. 密码派生、认证加密、错误密码和数据损坏故障测试。
 3. 中断继续、对象索引与大量小文件性能测量。
 4. Windows桌面存档选择/版本预览/恢复确认UI。
 5. 多设备同步、冲突审阅和正式版本发布。
 
 新作品集项目，不宣称符合飞书活动原有私有仓库准入。
+
+## v0.2 保留策略审阅与真实恢复预演
+
+```sh
+saveharbor retention store --keep-latest 3
+saveharbor retention store --keep-latest 3 --protect SNAPSHOT_ID --rehearse new-rehearsal
+python examples/retention.py
+```
+
+`--keep-latest` 必填，1至1000的严格整数；按创建时间转换为UTC从新到旧选择，时间相同按snapshot ID倒序稳定决胜，不按带不同时区的字符串排序。可重复 `--protect` 指定不同的现有版本，它们与最新N份取并集。空库、未知/重复保护ID、无时区/越界时间、损坏清单或对象均拒绝；N大于现有数量就全部保留。至少保留一份，不自动删“最后一个”。
+
+默认只审阅：输出 `keep`、`retire_candidates`、`object_candidates_if_retired`、`candidate_content_bytes` 与 `plan_sha256`。所有版本和现有对象（包括孤立对象）必须先通过校验；任意保留版本引用的共享对象都不是候选。对象分为仅候选版本引用和无版本引用两种。字节数是内容大小总和，**不是可立即释放的磁盘空间**，不含元数据、硬链接/压缩/稀疏语义。
+
+`--rehearse` 必须给新目录且不与库重叠；工具在其下用版本ID创建子目录，逐保留版本实际写出文件、fsync、校验内容，再重新读取目标核对每个内容摘要和目录结构（包括空目录）。全部成功后才给 `restore_rehearsal.verified:true`。不加载另一份清单来恢复；审阅/复制/目标复验共享钉住的内存清单。原 `restore` 行为保持兼容。
+
+API：`from saveharbor.core import retention_plan, rehearse_retention`，分别调用 `retention_plan(store, keep_latest=3, protect=[id])` 和 `rehearse_retention(store, new_target, keep_latest=3, protect=[id])`。默认审阅的 `complete:true` 不表示已验证真实恢复，必须另看 `restore_rehearsal.verified`。退出码0完成、2失败；失败不输出部分候选或恢复成功报告，新目标可能不完整并保留，不自动清理，重试用另一个新目录。
+
+这是**不可执行删除的候选计划**：始终 `executable:false`，不删除/移动任何版本或对象，不提供apply命令。即使恢复预演通过也不是删除授权；持久审批、可恢复隔离、跨进程排他与最后回收仍未实现。plan摘要规范绑定明确策略、全catalog清单字节SHA及对象SHA/大小，使用sort_keys/ensure_ascii/紧凑JSON的UTF-8计算；不是签名、身份或持续有效承诺，不应交给外部脚本盲目删除。库后续变化应重新审阅和预演。
+
+请暂停该库的其他写入后使用：检查前后完整目录条目及文件身份/size/mtime/ctime，出现pending/非规范文件、链接或普通并发变动则失败关闭；不自动清除pending。只适用于工具格式的可信本地库，不防恶意同权限修改、恢复元数据伪装或链接竞态，不是原子文件系统快照。保留审阅另限1000版本、100000对象、合计100000路径项/32MiB清单；单清单8MiB限制不变。没有总内容容量、硬CPU/RSS/磁盘限额；对象核验读全量内容，预演会实际占用保留版本的空间，需预留容量。
+
+候选报告虽不列原文件名，版本ID/时间/数量/内容摘要仍可能敏感，SHA不是匿名化；实际恢复文件也含原内容。没有加密、签名、GUI或真实断电恢复保证。

@@ -13,11 +13,11 @@ import saveharbor
 def main():
     repository = Path(__file__).resolve().parents[1]
     installed = Path(saveharbor.__file__).resolve()
-    if installed.is_relative_to(repository) or "site-packages" not in installed.parts:
+    if (installed.is_relative_to(repository) and '.venv' not in installed.parts) or "site-packages" not in installed.parts:
         raise RuntimeError("Expected installed wheel, not repository source")
     version = importlib.metadata.version("saveharbor")
-    if version != "0.1.3":
-        raise RuntimeError("Expected SaveHarbor 0.1.3")
+    if version != "0.2.0" or saveharbor.__version__ != version:
+        raise RuntimeError("Expected SaveHarbor 0.2.0 and matching module version")
     spec = importlib.util.spec_from_file_location(
         "installed_restore_faults", repository / "tests" / "test_restore_faults.py")
     module = importlib.util.module_from_spec(spec)
@@ -26,12 +26,20 @@ def main():
         unittest.defaultTestLoader.loadTestsFromModule(module))
     if not result.wasSuccessful() or result.testsRun != 8:
         return 1
+    spec = importlib.util.spec_from_file_location(
+        'installed_retention', repository / 'tests' / 'test_retention.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    retention = unittest.TextTestRunner(verbosity=2).run(
+        unittest.defaultTestLoader.loadTestsFromModule(module))
+    if not retention.wasSuccessful() or retention.testsRun != 26:
+        return 1
     command = subprocess.run([sys.executable, "-I", "-m", "saveharbor", "--help"],
                              capture_output=True, text=True)
     if command.returncode != 0 or "restore" not in command.stdout:
         raise RuntimeError("Installed CLI smoke test failed")
     print(json.dumps({"version": version, "fault_tests": result.testsRun,
-                      "installed": str(installed), "cli": "passed"}))
+                      'retention_tests': retention.testsRun, "installed": str(installed), "cli": "passed"}))
     return 0
 
 

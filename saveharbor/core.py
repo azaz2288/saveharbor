@@ -267,6 +267,14 @@ def restore(root: Path, snapshot: str, target: Path):
         # Pin one validated manifest for both preflight and copying. Re-reading
         # after verification could silently restore a different valid manifest.
         _verify_manifest(root, manifest)
+        return _restore_manifest(root, manifest, target)
+    except OSError as exc:
+        raise BackupError("Restore failed; new destination may be incomplete, existing destinations are not overwritten") from exc
+
+
+def _restore_manifest(root, manifest, target):
+    """Copy the pinned, preflighted manifest; callers own validation/overlap checks."""
+    try:
         target.mkdir(parents=True, exist_ok=False)
         for name in sorted(manifest["directories"], key=lambda p: (p.count("/"), p)):
             (target / name).mkdir(exist_ok=False)
@@ -283,7 +291,7 @@ def restore(root: Path, snapshot: str, target: Path):
                 os.fsync(output.fileno())
             if (hasher.hexdigest(), size) != (entry["sha256"], entry["size"]):
                 raise BackupError("Content changed during restore; destination is incomplete")
-        return {"version": 1, "restored": True, "snapshot": snapshot, "files": len(manifest["files"])}
+        return {"version": 1, "restored": True, "snapshot": manifest['snapshot'], "files": len(manifest["files"])}
     except OSError as exc:
         raise BackupError("Restore failed; new destination may be incomplete, existing destinations are not overwritten") from exc
 
@@ -313,3 +321,13 @@ def list_snapshots(root: Path):
         return {"version": 1, "snapshots": sorted(result, key=lambda item: (item["created_at"] or "", item["snapshot"]))}
     except OSError as exc:
         raise BackupError("Could not list snapshots") from exc
+
+
+def retention_plan(root: Path, *, keep_latest, protect=()):
+    from .retention import plan
+    return plan(root, keep_latest=keep_latest, protect=protect)
+
+
+def rehearse_retention(root: Path, target: Path, *, keep_latest, protect=()):
+    from .retention import rehearse
+    return rehearse(root, target, keep_latest=keep_latest, protect=protect)

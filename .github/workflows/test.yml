@@ -25,3 +25,5 @@ jobs:
           cd "$RUNNER_TEMP"
           saveharbor --help
           python -c "import saveharbor; assert 'site-packages' in saveharbor.__file__"
+          python -I "$GITHUB_WORKSPACE/tools/verify_installed.py"
+          python -m pip check

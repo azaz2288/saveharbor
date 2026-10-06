@@ -239,12 +239,17 @@ def load_snapshot(root: Path, snapshot: str):
     return value
 
 
+def _verify_manifest(root: Path, manifest):
+    """Preflight every object referenced by this already validated manifest."""
+    for entry in manifest["files"].values():
+        if _digest(root / "objects" / entry["sha256"]) != (entry["sha256"], entry["size"]):
+            raise BackupError("Content digest or size mismatch")
+
+
 def verify(root: Path, snapshot: str):
     try:
         manifest = load_snapshot(root, snapshot)
-        for entry in manifest["files"].values():
-            if _digest(root / "objects" / entry["sha256"]) != (entry["sha256"], entry["size"]):
-                raise BackupError("Content digest or size mismatch")
+        _verify_manifest(root, manifest)
         return {"version": 1, "verified": True, "snapshot": snapshot, "files": len(manifest["files"])}
     except OSError as exc:
         raise BackupError("Snapshot object is missing or inaccessible") from exc
@@ -258,8 +263,10 @@ def restore(root: Path, snapshot: str, target: Path):
         destination = target.resolve(strict=False)
         if destination == root or destination.is_relative_to(root) or root.is_relative_to(destination):
             raise BackupError("Restore destination and store must not overlap")
-        verify(root, snapshot)
         manifest = load_snapshot(root, snapshot)
+        # Pin one validated manifest for both preflight and copying. Re-reading
+        # after verification could silently restore a different valid manifest.
+        _verify_manifest(root, manifest)
         target.mkdir(parents=True, exist_ok=False)
         for name in sorted(manifest["directories"], key=lambda p: (p.count("/"), p)):
             (target / name).mkdir(exist_ok=False)

@@ -152,13 +152,17 @@ class RestoreFaultTests(unittest.TestCase):
         self.assertTrue(core.verify(self.store, self.snapshot)["verified"])
 
     def test_manifest_publication_failure_preserves_previous_snapshot(self):
+        # Backup resolves store paths (including Windows short TEMP names).
+        # Exercise an alias portably so the injector cannot rely on spelling.
+        self.store = self.source / ".." / "store"
         before = self.stored_bytes()
         original_link = os.link
+        snapshots = (self.store / "snapshots").resolve()
         hit = False
 
         def faulting_link(source, target, *args, **kwargs):
             nonlocal hit
-            if Path(target).parent == self.store / "snapshots":
+            if Path(target).parent.resolve() == snapshots:
                 hit = True
                 raise OSError(errno.EIO, "injected manifest publication failure")
             return original_link(source, target, *args, **kwargs)

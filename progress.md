@@ -7,6 +7,8 @@ All32 tests passed locally (Windows31 passed/1 POSIX symlink skipped), plus temp
 
 Independent wheel0.1.3 installed into a new temporary environment; source-external -I execution verified site-packages/version, all8 fault tests, CLI module/console help and pip check. CI now repeats the installed fault suite on Windows/Linux. Same-SHA remote CI evidence will be recorded in the external maintenance report after publication. Next: verified retention policy/two-phase GC design and interruption coverage; deletion is still unimplemented.
 
+First published commit bedead6 passed Linux CI but Windows publication-fault test did not raise: its injection compared raw store spelling against backup's resolved target. Added a portable source/../store alias to reproduce the failure locally, then normalized both injector paths (without removing the hit assertion or weakening the expected error). This is a test-harness correction, not a second product restore fix; the failed run remains recorded in maintenance.
+
 ## 2026-10-06 initial v0.1
 22 tests (Windows21 passed/1 POSIX symlink skipped), real temporary old-save restore demo, independent wheel installation and installed CLI passed. Published62d68da4d0d8f5578113cf01510a1d71250d629a; same-SHA Windows/Linux CI success.
 
